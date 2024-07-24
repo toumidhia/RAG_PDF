@@ -1,0 +1,80 @@
+# Dhia Toumi
+
+!pip install PyPDF2
+
+!pip install pymupdf
+
+! pip install langchain_community tiktoken langchain-openai langchainhub chromadb langchain
+
+! pip install langchain-google-genai
+
+! pip install gpt4all
+
+!pip install openai
+
+import os
+os.environ['LANGCHAIN_TRACING_V2'] = 'true'
+os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
+os.environ['LANGCHAIN_API_KEY'] = 'LANGCHAIN_API_KEY'
+
+import os
+from langchain import hub
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyMuPDFLoader as PDFLoader
+from langchain_community.vectorstores import Chroma
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.embeddings import GPT4AllEmbeddings
+import bs4
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+from langchain_community.embeddings import GPT4AllEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+# Set up environment variables
+os.environ['GOOGLE_API_KEY'] = 'GOOGLE_API_KEY'
+
+# Load the PDF document
+loader = PDFLoader(file_path="https://www.clg-la-grange-du-bois-savigny-le-temple.fr/wp-content/uploads/alkivia/file/Physique/biographie%20anthony%20sur%20Thomas%20Edison.pdf")
+docs = loader.load()
+
+# Split the text of the PDF
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+splits = text_splitter.split_documents(docs)
+
+# Embed the text
+vectorstore = Chroma.from_documents(documents=splits, embedding=GPT4AllEmbeddings())
+retriever = vectorstore.as_retriever()
+
+# Define the prompt
+prompt = hub.pull("rlm/rag-prompt")
+
+# Define the chat model
+chat = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+
+# Define the post-processing function
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+# Define the RAG system function
+def rag_system(question):
+    # Build the RAG chain
+    rag_chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | prompt
+        | chat
+        | StrOutputParser()
+    )
+
+    # Ask the question
+    response = rag_chain.invoke(question)
+
+    # Print the response
+    print(response)
+
+# Example usage
+question = "qui est Thomas EDISON ?"
+rag_system(question)
